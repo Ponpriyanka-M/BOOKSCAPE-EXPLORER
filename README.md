@@ -61,4 +61,4 @@ BookScape Explorer connects to the Google Books API to gather information about 
 
 ### 🙌 Contributions
 
-Feel free to fork, explore, and enhance this project! Pull requests are welcome.
+Feel free to work, explore, and enhance this project! Pull requests are welcome.
