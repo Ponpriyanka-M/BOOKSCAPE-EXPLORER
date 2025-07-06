@@ -65,37 +65,41 @@ def generate_query(question):
         }
         return questionMap.get(question)
 
-# Function to get books data using Google Books API
-def get_books_data(query):
-    #Google API Key(Replace with your key)
-    api_key = "AIzaSyBjehTwSPqe6wCYi_mL4TgmwoAyst5oADI"
+import requests
+import pandas as pd
+from sqlalchemy import create_engine
 
-    #URL for Google Books API
+def get_books_data(query):
+    api_key = "AIzaSyBjehTwSPqe6wCYi_mL4TgmwoAyst5oADI"
     url = "https://www.googleapis.com/books/v1/volumes"
 
-    max_results = 40
+    max_results = 500
+    batch_size = 40  # Google Books API max per call
     all_books_data = []
-    start_index = 0 
-    while len(all_books_data) < max_results:
-        
-        # Make the API request
-        response = requests.get(url,params={"key":api_key,"q":query,"maxResults":40,"startIndex":start_index})
+
+    for start_index in range(0, max_results, batch_size):
+        response = requests.get(
+            url,
+            params={
+                "key": api_key,
+                "q": query,
+                "maxResults": batch_size,
+                "startIndex": start_index
+            }
+        )
+
         if response.status_code != 200:
-            print(f"Error fetching data: {response.status_code}")
+            print(f"Error fetching data at index {start_index}: {response.status_code}")
             break
-        
-        # Parse the response data to JSON
+
         books = response.json()
-       
-        # Check if the 'items' key is in the response
         if 'items' not in books:
             print("No more books found!")
             break
-        
-        # Extract information for each book
+
         for book in books['items']:
             volume_info = book.get('volumeInfo', {})
-            sale_info = book.get('saleInfo',{})
+            sale_info = book.get('saleInfo', {})
             book_info = {
                 'book_id': book.get('id'),
                 'search_key': query,
@@ -103,47 +107,48 @@ def get_books_data(query):
                 'book_subtitle': volume_info.get('subtitle', 'N/A'),
                 'book_authors': ",".join(volume_info.get('authors', ['N/A'])),
                 'book_description': volume_info.get('description', 'N/A'),
-                'industryIdentifiers': volume_info.get('industryIdentifiers',[{}])[0].get('type'),
-                'text_readingModes': volume_info.get('readingModes', {}).get('text',False),
-                'image_readingModes': volume_info.get('readingModes', {}).get('image',False),
-                'pageCount': volume_info.get('pageCount',0),
-                'categories': ",".join(volume_info.get('categories','N/A')),
-                'language': volume_info.get('language','N/A'),
-                'imageLinks': volume_info.get('imageLinks',{}).get('thumbnail','N/A'),
-                'ratingsCount': volume_info.get('ratingsCount',0),
-                'averageRating': volume_info.get('averageRating',0),
-                'country': sale_info.get('country','N/A'),
-                'saleability': sale_info.get('saleability','N/A'),
-                'isEbook': sale_info.get('isEbook',False),
-                'amount_listPrice': sale_info.get('listPrice',{}).get('amount',0),
-                'currencyCode_listPrice': sale_info.get('listPrice',{}).get('currencyCode','N/A'),
-                'amount_retailPrice': sale_info.get('retailPrice',{}).get('amount',0),
-                'currencyCode_retailPrice': sale_info.get('retailPrice',{}).get('currencyCode','N/A'),
-                'buyLink': sale_info.get('buyLink','N/A'),
-                'year': volume_info.get('publishedDate','N/A'),
-                'publisher': book.get('volumeInfo', {}).get('publisher', 'N/A'),
+                'industryIdentifiers': volume_info.get('industryIdentifiers', [{}])[0].get('type'),
+                'text_readingModes': volume_info.get('readingModes', {}).get('text', False),
+                'image_readingModes': volume_info.get('readingModes', {}).get('image', False),
+                'pageCount': volume_info.get('pageCount', 0),
+                'categories': ",".join(volume_info.get('categories', ['N/A'])),
+                'language': volume_info.get('language', 'N/A'),
+                'imageLinks': volume_info.get('imageLinks', {}).get('thumbnail', 'N/A'),
+                'ratingsCount': volume_info.get('ratingsCount', 0),
+                'averageRating': volume_info.get('averageRating', 0),
+                'country': sale_info.get('country', 'N/A'),
+                'saleability': sale_info.get('saleability', 'N/A'),
+                'isEbook': sale_info.get('isEbook', False),
+                'amount_listPrice': sale_info.get('listPrice', {}).get('amount', 0),
+                'currencyCode_listPrice': sale_info.get('listPrice', {}).get('currencyCode', 'N/A'),
+                'amount_retailPrice': sale_info.get('retailPrice', {}).get('amount', 0),
+                'currencyCode_retailPrice': sale_info.get('retailPrice', {}).get('currencyCode', 'N/A'),
+                'buyLink': sale_info.get('buyLink', 'N/A'),
+                'year': volume_info.get('publishedDate', 'N/A'),
+                'publisher': volume_info.get('publisher', 'N/A'),
             }
-            
-            # Add the book info to the list
+
             all_books_data.append(book_info)
-            
-            # Stop if we have reached the required number of results
+
             if len(all_books_data) >= max_results:
                 break
+
     df = pd.DataFrame(all_books_data)
-    # Save the DataFrame to the database
-    connection_string = "mysql+pymysql://root:pritri@localhost:3306/books_scrape"
+
+    # Append to MySQL database
+    connection_string = "mysql+pymysql://root:pritri06@localhost:3306/books_scrape"
     engine = create_engine(connection_string)
     df.to_sql(
-        name="books_data",        # Name of the table in the database
-        con=engine,            # SQLAlchemy engine connection
-        index=False,           # Do not include DataFrame index as a column
-        if_exists="append",   # Replace the table if it already exists
-        chunksize=40           # Number of rows to insert in each chunk (for performance)
+        name="books_data",
+        con=engine,
+        index=False,
+        if_exists="append",
+        chunksize=200
     )
-    #st.success("Data saved to the database successfully!")
-    return df  # Optionally return the DataFrame for further use
-    
+
+    print("✅ Data saved to the database successfully!")
+    return df
+
 
 
 def validate_books_data(query):

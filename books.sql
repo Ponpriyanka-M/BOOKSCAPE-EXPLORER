@@ -1,4 +1,5 @@
 use books_scrape;
+select * from Books_data;
 
 #1.Check Availability of eBooks vs Physical Books
 SELECT isEbook,COUNT(*) AS total_books FROM Books_data GROUP BY isEbook;
